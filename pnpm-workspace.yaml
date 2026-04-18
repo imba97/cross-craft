@@ -1,0 +1,60 @@
+packages:
+  - apps/*
+  - packages/*
+allowBuilds:
+  "@parcel/watcher": true
+  electron: true
+  electron-winstaller: true
+  esbuild: true
+catalog:
+  "@inquirer/prompts": ^8.4.1
+  electron: ^41.2.0
+  electron-builder: ^26.8.1
+  unconfig: ^7.5.0
+
+catalogMode: prefer
+
+catalogs:
+  build:
+    esbuild: ^0.28.0
+  capacitor:
+    "@capacitor/android": ^8.3.1
+    "@capacitor/cli": ^8.3.1
+    "@capacitor/core": ^8.3.1
+    "@capacitor/ios": ^8.3.1
+  release:
+    bumpp: ^11.0.1
+  style:
+    sass: ^1.99.0
+    uno-colors: ^0.1.0
+  types:
+    "@types/node": ^25.6.0
+    "@typescript/native-preview": 7.0.0-dev.20260328.1
+    typescript: ^6.0.3
+  unocss:
+    "@unocss/preset-attributify": ^66.6.8
+    "@unocss/preset-icons": ^66.6.8
+    "@unocss/preset-typography": ^66.6.8
+    "@unocss/preset-web-fonts": ^66.6.8
+    "@unocss/preset-wind3": ^66.6.8
+    "@unocss/reset": ^66.6.8
+    "@unocss/vite": ^66.6.8
+    unocss: ^66.6.8
+  vite:
+    "@vitejs/plugin-vue": ^6.0.6
+    vite: npm:@voidzero-dev/vite-plus-core@0.1.16
+    vite-plus: ^0.1.18
+    vitest: npm:@voidzero-dev/vite-plus-test@0.1.16
+  vue:
+    vue: ^3.5.32
+    vue-router: ^5.0.4
+overrides:
+  vite: "catalog:vite"
+  vitest: "catalog:vite"
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: "*"
+    vitest: "*"

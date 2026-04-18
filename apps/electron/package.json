@@ -1,0 +1,58 @@
+{
+  "name": "electron",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CrossCraft desktop application package.",
+  "author": "CrossCraft Team",
+  "type": "module",
+  "main": "dist/src/main.cjs",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "package:windows": "vp run build && vp exec electron-builder --win nsis --publish never --config.directories.output=release/windows",
+    "package:linux": "vp run build && vp exec electron-builder --linux AppImage --publish never --config.directories.output=release/linux",
+    "package:macos": "vp run build && vp exec electron-builder --mac dmg --publish never --config.directories.output=release/macos",
+    "dev": "vp dev --config vite.config.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@capacitor/core": "catalog:capacitor",
+    "@cross-craft/capacitor-electron": "workspace:*"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "catalog:capacitor",
+    "@types/node": "catalog:types",
+    "electron": "catalog:",
+    "electron-builder": "catalog:",
+    "esbuild": "catalog:build",
+    "typescript": "catalog:types",
+    "vite-plugin-cross-craft-electron": "workspace:*",
+    "vite-plus": "catalog:vite"
+  },
+  "build": {
+    "appId": "com.crosscraft.app",
+    "productName": "CrossCraft",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "www/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false
+    },
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}"
+  }
+}

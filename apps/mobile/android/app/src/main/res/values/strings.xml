@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">CrossCraft</string>
+    <string name="title_activity_main">CrossCraft</string>
+    <string name="package_name">com.crosscraft.app</string>
+    <string name="custom_url_scheme">com.crosscraft.app</string>
+</resources>

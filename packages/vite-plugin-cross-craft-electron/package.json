@@ -1,0 +1,41 @@
+{
+  "name": "vite-plugin-cross-craft-electron",
+  "version": "0.1.0",
+  "description": "CrossCraft development plugin for Electron + frontend hot workflow.",
+  "license": "MIT",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "vp pack",
+    "dev": "vp pack --watch",
+    "check": "vp check",
+    "prepublishOnly": "vp run build"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:types",
+    "typescript": "catalog:types",
+    "vite-plus": "catalog:vite"
+  },
+  "inlinedDependencies": {
+    "@oxc-project/types": "0.124.0",
+    "@types/chai": "5.2.3",
+    "@types/deep-eql": "4.0.2",
+    "@voidzero-dev/vite-plus-core": "0.1.18",
+    "@voidzero-dev/vite-plus-test": "0.1.18",
+    "assertion-error": "2.0.1",
+    "esbuild": "0.28.0",
+    "oxfmt": "0.45.0",
+    "oxlint": "1.60.0",
+    "vite-plus": "0.1.18"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler"
+  },
+  "include": ["apps/*/vite.config.ts", "packages/*/vite.config.ts", "scripts/vite/**/*.ts"],
+  "exclude": []
+}
