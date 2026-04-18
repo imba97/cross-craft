@@ -54,6 +54,17 @@ const client = createElectronBridgeClientFromGlobal();
 const runtimeInfo = await client.getRuntimeInfo();
 ```
 
+### Capacitor core platform patch (renderer)
+
+```ts
+import { Capacitor } from "@capacitor/core";
+import { installElectronCapacitor } from "@cross-craft/capacitor-electron/capacitor";
+
+installElectronCapacitor({ capacitor: Capacitor });
+
+console.log(Capacitor.getPlatform()); // "electron" (when preload bridge exists)
+```
+
 ## Development
 
 ```bash
