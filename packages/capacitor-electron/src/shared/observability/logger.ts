@@ -2,6 +2,7 @@ import type { BridgeErrorCode } from "../errors/codes";
 
 export type BridgeLogRecord = {
   requestId: string;
+  traceId: string;
   method: string;
   durationMs: number;
   status: "ok" | "error";

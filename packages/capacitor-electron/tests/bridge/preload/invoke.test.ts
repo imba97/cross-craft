@@ -60,4 +60,23 @@ describe("bridge/preload/invoke", () => {
       message: "unsupported",
     });
   });
+
+  test("includes traceId from error response details", async () => {
+    const invoke = createPreloadInvoker(async (_channel, request) => ({
+      ok: false as const,
+      requestId: request.requestId,
+      traceId: "trace-bridge-1",
+      error: {
+        code: BRIDGE_ERROR_CODES.internalError,
+        message: "internal",
+      },
+    }));
+
+    await expect(invoke(BRIDGE_METHODS.runtimeGetInfo, {})).rejects.toMatchObject({
+      code: BRIDGE_ERROR_CODES.internalError,
+      details: {
+        traceId: "trace-bridge-1",
+      },
+    });
+  });
 });

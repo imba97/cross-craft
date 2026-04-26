@@ -16,7 +16,8 @@
   },
   "dependencies": {
     "@capacitor/core": "catalog:capacitor",
-    "@cross-craft/capacitor-electron": "workspace:*"
+    "@cross-craft/capacitor-electron": "workspace:*",
+    "@cross-craft/utils": "workspace:*"
   },
   "devDependencies": {
     "@capacitor/cli": "catalog:capacitor",

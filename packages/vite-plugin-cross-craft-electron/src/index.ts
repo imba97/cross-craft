@@ -2,8 +2,8 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { access } from "node:fs/promises";
 import { createInterface, type Interface as ReadlineInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
-import { styleText } from "node:util";
 import type { Plugin } from "vite-plus";
+import { createLogger, type LoggerInstance } from "@cross-craft/utils";
 
 type SpawnCommand = {
   command: string;
@@ -12,23 +12,8 @@ type SpawnCommand = {
   env?: NodeJS.ProcessEnv;
 };
 
-const TAG_STYLES: Readonly<Record<string, Parameters<typeof styleText>[0]>> = {
-  prebuild: "cyan",
-  frontend: "green",
-  "electron-build": "magenta",
-  electron: "blue",
-  error: "red",
-  info: "dim",
-};
-
-const DEFAULT_TAG_STYLES: ReadonlyArray<Parameters<typeof styleText>[0]> = [
-  "cyan",
-  "green",
-  "magenta",
-  "blue",
-  "yellow",
-];
 const LEADING_TAG_RE = /^\s*\[[^\]]+\]\s/;
+const loggerRegistry = new Map<string, LoggerInstance>();
 
 function stripLeadingAnsi(text: string): string {
   let cursor = 0;
@@ -43,23 +28,27 @@ function stripLeadingAnsi(text: string): string {
   return text.slice(cursor);
 }
 
-function getTagStyle(tag: string): Parameters<typeof styleText>[0] {
-  const mappedStyle = TAG_STYLES[tag];
-  if (mappedStyle) {
-    return mappedStyle;
+function getTagLogger(tag: string): LoggerInstance {
+  const existing = loggerRegistry.get(tag);
+  if (existing) {
+    return existing;
   }
-
-  const hash = Array.from(tag).reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return DEFAULT_TAG_STYLES[hash % DEFAULT_TAG_STYLES.length] ?? "white";
-}
-
-function formatTag(tag: string): string {
-  return styleText(getTagStyle(tag), `[${tag}]`);
+  const created = createLogger(`vite-electron:${tag}`);
+  loggerRegistry.set(tag, created);
+  return created;
 }
 
 function logWithTag(tag: string, message: string, type: "stdout" | "stderr" = "stdout"): void {
-  const stream = type === "stderr" ? process.stderr : process.stdout;
-  stream.write(`${formatTag(tag)} ${message}\n`);
+  const logger = getTagLogger(tag);
+  if (type === "stderr") {
+    logger.error(message);
+    return;
+  }
+  if (tag === "info") {
+    logger.info(message);
+    return;
+  }
+  logger.success(message);
 }
 
 function pipeWithTag(
@@ -68,13 +57,11 @@ function pipeWithTag(
   type: "stdout" | "stderr",
 ): void {
   const source = type === "stderr" ? child.stderr : child.stdout;
-  const target = type === "stderr" ? process.stderr : process.stdout;
 
   source.on("data", (chunk) => {
     const text = String(chunk);
-    const prefix = `${formatTag(tag)} `;
     const lines = text.split(/(\r?\n)/);
-    const taggedText = lines
+    const normalizedText = lines
       .map((segment) => {
         if (segment === "\n" || segment === "\r\n" || segment.length === 0) {
           return segment;
@@ -85,11 +72,16 @@ function pipeWithTag(
           return segment;
         }
 
-        return `${prefix}${segment}`;
+        return segment;
       })
       .join("");
-
-    target.write(taggedText);
+    const normalizedLines = normalizedText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    for (const line of normalizedLines) {
+      logWithTag(tag, line, type);
+    }
   });
 }
 
@@ -339,7 +331,7 @@ export function synraElectronPlugin(options: SynraElectronPluginOptions = {}): P
         );
         quitting = true;
         teardownInteractiveCommands();
-        cleanup();
+        void cleanup();
         requestQuit?.();
       });
     })()

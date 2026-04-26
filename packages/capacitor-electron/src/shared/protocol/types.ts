@@ -18,12 +18,14 @@ export type BridgeRequest<TPayload = unknown> = {
 export type BridgeSuccessResponse<TData = unknown> = {
   ok: true;
   requestId: string;
+  traceId?: string;
   data: TData;
 };
 
 export type BridgeErrorResponse = {
   ok: false;
   requestId: string;
+  traceId?: string;
   error: {
     code: BridgeErrorCode;
     message: string;

@@ -106,6 +106,7 @@ export function createPreloadInvoker(ipcInvoke: IpcInvoke) {
 
     if (!response.ok) {
       throw new BridgeError(response.error.code, response.error.message, {
+        traceId: response.traceId,
         ...(typeof response.error.details === "object"
           ? (response.error.details as Record<string, unknown>)
           : {}),

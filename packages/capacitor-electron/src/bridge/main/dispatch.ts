@@ -15,10 +15,15 @@ export type MainDispatcherOptions = {
   logger?: BridgeLogger;
 };
 
-function createErrorResponse(requestId: string, error: BridgeError): BridgeResponse {
+function createErrorResponse(
+  requestId: string,
+  traceId: string,
+  error: BridgeError,
+): BridgeResponse {
   return {
     ok: false,
     requestId,
+    traceId,
     error: {
       code: error.code,
       message: error.message,
@@ -50,6 +55,25 @@ function withTimeout<T>(task: Promise<T>, timeoutMs: number): Promise<T> {
   });
 }
 
+function resolveTimeoutMs(rawTimeout: unknown, fallbackTimeoutMs: number): number {
+  if (rawTimeout === undefined) {
+    return fallbackTimeoutMs;
+  }
+  if (typeof rawTimeout !== "number" || !Number.isFinite(rawTimeout)) {
+    throw new BridgeError(
+      BRIDGE_ERROR_CODES.invalidParams,
+      "meta.timeoutMs must be a finite number.",
+    );
+  }
+  if (rawTimeout <= 0) {
+    throw new BridgeError(
+      BRIDGE_ERROR_CODES.invalidParams,
+      "meta.timeoutMs must be greater than 0.",
+    );
+  }
+  return Math.floor(rawTimeout);
+}
+
 export function createMainDispatcher(
   handlerMap: BridgeHandlerMap,
   options: MainDispatcherOptions = {},
@@ -59,6 +83,9 @@ export function createMainDispatcher(
 
   return async function dispatch(rawRequest: unknown): Promise<BridgeResponse> {
     const requestId = isBridgeRequest(rawRequest) ? rawRequest.requestId : "unknown-request";
+    const traceId = isBridgeRequest(rawRequest)
+      ? (rawRequest.meta?.traceId ?? rawRequest.requestId)
+      : "unknown-trace";
     const startAt = Date.now();
 
     try {
@@ -85,15 +112,21 @@ export function createMainDispatcher(
 
       const method = rawRequest.method as keyof BridgeHandlerMap;
       const handler = handlerMap[method];
-      const timeoutMs = rawRequest.meta?.timeoutMs ?? defaultTimeoutMs;
+      const timeoutMs = resolveTimeoutMs(rawRequest.meta?.timeoutMs, defaultTimeoutMs);
       const data = await withTimeout(
         Promise.resolve(handler(rawRequest as never)) as Promise<unknown>,
         timeoutMs,
       );
 
-      const response: BridgeResponse = { ok: true, requestId: rawRequest.requestId, data };
+      const response: BridgeResponse = {
+        ok: true,
+        requestId: rawRequest.requestId,
+        traceId,
+        data,
+      };
       logger.log({
         requestId: rawRequest.requestId,
+        traceId,
         method: rawRequest.method,
         durationMs: Date.now() - startAt,
         status: "ok",
@@ -104,13 +137,14 @@ export function createMainDispatcher(
       const bridgeError = toBridgeError(error);
       logger.log({
         requestId,
+        traceId,
         method: isBridgeRequest(rawRequest) ? rawRequest.method : "unknown",
         durationMs: Date.now() - startAt,
         status: "error",
         errorCode: bridgeError.code,
       });
 
-      return createErrorResponse(requestId, bridgeError);
+      return createErrorResponse(requestId, traceId, bridgeError);
     }
   };
 }

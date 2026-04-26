@@ -1,30 +1,14 @@
 import { join, resolve } from "node:path";
-import { styleText } from "node:util";
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import { setupBridgeMainRuntime } from "@cross-craft/capacitor-electron";
+import { useLogger } from "@cross-craft/utils";
+import { readElectronRuntimeEnv } from "./env";
 
-const TAG_STYLES: Readonly<Record<string, Parameters<typeof styleText>[0]>> = {
-  "electron-main": "blue",
-  "renderer:0": "green",
-  "renderer:1": "yellow",
-  "renderer:2": "red",
-  "renderer:3": "magenta",
-};
-
-function styleTag(tag: string): string {
-  const style = TAG_STYLES[tag] ?? "cyan";
-  return styleText(style, `[${tag}]`);
-}
-
-function logWithTag(tag: string, ...args: unknown[]): void {
-  console.log(styleTag(tag), ...args);
-}
-
-function errorWithTag(tag: string, ...args: unknown[]): void {
-  console.error(styleTag(tag), ...args);
-}
+const { appLifecycleLogger, bridgeHealthLogger } = useLogger();
 
 function createMainWindow(): BrowserWindow {
+  const startupBeginAt = Date.now();
+  const runtimeEnv = readElectronRuntimeEnv();
   const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -36,7 +20,7 @@ function createMainWindow(): BrowserWindow {
     },
   });
 
-  const devServerUrl = process.env.VITE_DEV_SERVER_URL;
+  const devServerUrl = runtimeEnv.devServerUrl;
   if (devServerUrl) {
     void mainWindow.loadURL(devServerUrl);
   } else {
@@ -44,7 +28,7 @@ function createMainWindow(): BrowserWindow {
   }
 
   mainWindow.webContents.on("preload-error", (_event, preloadPath, error) => {
-    errorWithTag("electron-main", "preload-error:", preloadPath, error);
+    bridgeHealthLogger.error("preload-error:", preloadPath, error);
   });
 
   mainWindow.webContents.on("did-finish-load", () => {
@@ -53,21 +37,30 @@ function createMainWindow(): BrowserWindow {
         "Boolean(window.__crossCraftCapElectron && window.__crossCraftCapElectron.invoke)",
       )
       .then((available) => {
-        logWithTag("electron-main", "bridge available:", available);
+        bridgeHealthLogger.info("bridge available:", available);
+        appLifecycleLogger.info("renderer load completed in", `${Date.now() - startupBeginAt}ms`);
       })
       .catch((error) => {
-        errorWithTag("electron-main", "bridge probe failed:", error);
+        bridgeHealthLogger.error("bridge probe failed:", error);
       });
   });
 
+  mainWindow.once("ready-to-show", () => {
+    appLifecycleLogger.success("window ready-to-show in", `${Date.now() - startupBeginAt}ms`);
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.show();
+    }
+  });
+
   mainWindow.webContents.on("console-message", (_event, level, message) => {
-    logWithTag(`renderer:${String(level)}`, message);
+    appLifecycleLogger.info(`renderer:${String(level)}`, message);
   });
 
   return mainWindow;
 }
 
 function registerCapacitorElectronBridge(): void {
+  bridgeHealthLogger.info("register capacitor-electron bridge");
   setupBridgeMainRuntime(ipcMain, {
     shellAdapter: {
       async openExternal(url: string): Promise<void> {
@@ -81,18 +74,22 @@ function registerCapacitorElectronBridge(): void {
 }
 
 void app.whenReady().then(() => {
+  appLifecycleLogger.info("app ready");
   registerCapacitorElectronBridge();
   createMainWindow();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
+      appLifecycleLogger.info("activate with empty windows, creating one");
       createMainWindow();
     }
   });
 });
 
 app.on("window-all-closed", () => {
+  appLifecycleLogger.warn("window-all-closed");
   if (process.platform !== "darwin") {
+    appLifecycleLogger.info("quitting app on non-darwin platform");
     app.quit();
   }
 });

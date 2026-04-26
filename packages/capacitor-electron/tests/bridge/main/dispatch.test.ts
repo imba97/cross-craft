@@ -41,6 +41,7 @@ describe("bridge/main/dispatch", () => {
     expect(response.ok).toBe(true);
     if (response.ok) {
       expect((response.data as RuntimeInfo).protocolVersion).toBe(BRIDGE_PROTOCOL_VERSION);
+      expect(response.traceId).toBe("req-1");
     }
   });
 
@@ -95,6 +96,40 @@ describe("bridge/main/dispatch", () => {
     expect(response.ok).toBe(false);
     if (!response.ok) {
       expect(response.error.code).toBe(BRIDGE_ERROR_CODES.timeout);
+      expect(response.traceId).toBe("req-3");
+    }
+  });
+
+  test("uses meta.traceId when provided", async () => {
+    const dispatch = createMainDispatcher(createHandlers());
+    const response = await dispatch({
+      protocolVersion: BRIDGE_PROTOCOL_VERSION,
+      requestId: "req-4",
+      method: BRIDGE_METHODS.runtimeGetInfo,
+      payload: {},
+      meta: {
+        traceId: "trace-custom-001",
+      },
+    });
+
+    expect(response.traceId).toBe("trace-custom-001");
+  });
+
+  test("rejects non-positive timeout value", async () => {
+    const dispatch = createMainDispatcher(createHandlers());
+    const response = await dispatch({
+      protocolVersion: BRIDGE_PROTOCOL_VERSION,
+      requestId: "req-5",
+      method: BRIDGE_METHODS.runtimeGetInfo,
+      payload: {},
+      meta: {
+        timeoutMs: 0,
+      },
+    });
+
+    expect(response.ok).toBe(false);
+    if (!response.ok) {
+      expect(response.error.code).toBe(BRIDGE_ERROR_CODES.invalidParams);
     }
   });
 });

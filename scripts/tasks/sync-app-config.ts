@@ -2,20 +2,22 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { resolveRepositoryRoot } from "../common/utils.ts";
 import { loadAppConfig } from "../config/app-config.ts";
+import {
+  applyReplacementRules,
+  replaceOrThrow,
+  withJsonTrailingNewline,
+} from "../../packages/utils/src/text.ts";
 
 const rootDir = resolveRepositoryRoot(import.meta.url);
-
-function replaceOrThrow(
-  content: string,
-  pattern: RegExp,
-  nextValue: string,
-  label: string,
-): string {
-  if (!pattern.test(content)) {
-    throw new Error(`failed to update ${label}: pattern not found`);
-  }
-  return content.replace(pattern, nextValue);
-}
+const WORKSPACE_PACKAGE_PATHS = [
+  "package.json",
+  "apps/frontend/package.json",
+  "apps/mobile/package.json",
+  "apps/electron/package.json",
+  "packages/capacitor-electron/package.json",
+  "packages/utils/package.json",
+  "packages/vite-plugin-cross-craft-electron/package.json",
+] as const;
 
 async function updateFrontendTitle(appName: string): Promise<void> {
   const filePath = resolve(rootDir, "apps/frontend/index.html");
@@ -46,67 +48,59 @@ async function updateElectronPackageProductName(
   json.build = json.build ?? {};
   json.build.productName = appName;
   json.build.artifactName = "${productName}-${version}-${os}-${arch}.${ext}";
-  await writeFile(filePath, `${JSON.stringify(json, null, 2)}\n`, "utf8");
+  await writeFile(filePath, withJsonTrailingNewline(json), "utf8");
 }
 
 async function updateWorkspaceVersions(appVersion: string): Promise<void> {
-  const packageJsonPaths = [
-    resolve(rootDir, "package.json"),
-    resolve(rootDir, "apps/frontend/package.json"),
-    resolve(rootDir, "apps/mobile/package.json"),
-    resolve(rootDir, "apps/electron/package.json"),
-    resolve(rootDir, "packages/capacitor-electron/package.json"),
-    resolve(rootDir, "packages/utils/package.json"),
-    resolve(rootDir, "packages/vite-plugin-cross-craft-electron/package.json"),
-  ];
-
-  for (const filePath of packageJsonPaths) {
+  for (const relativePath of WORKSPACE_PACKAGE_PATHS) {
+    const filePath = resolve(rootDir, relativePath);
     const raw = await readFile(filePath, "utf8");
     const json = JSON.parse(raw) as { version?: string };
     json.version = appVersion;
-    await writeFile(filePath, `${JSON.stringify(json, null, 2)}\n`, "utf8");
+    await writeFile(filePath, withJsonTrailingNewline(json), "utf8");
   }
 }
 
 async function updateCapacitorAppNames(appName: string): Promise<void> {
-  const mobileCapConfigPath = resolve(rootDir, "apps/mobile/capacitor.config.ts");
-  const electronCapConfigPath = resolve(rootDir, "apps/electron/capacitor.config.ts");
+  const targets = [
+    {
+      relativePath: "apps/mobile/capacitor.config.ts",
+      label: "mobile capacitor appName",
+    },
+    {
+      relativePath: "apps/electron/capacitor.config.ts",
+      label: "electron capacitor appName",
+    },
+  ] as const;
 
-  const mobileCapConfig = await readFile(mobileCapConfigPath, "utf8");
-  const electronCapConfig = await readFile(electronCapConfigPath, "utf8");
-
-  const nextMobileCapConfig = replaceOrThrow(
-    mobileCapConfig,
-    /appName:\s*"[^"]*"/,
-    `appName: "${appName}"`,
-    "mobile capacitor appName",
-  );
-  const nextElectronCapConfig = replaceOrThrow(
-    electronCapConfig,
-    /appName:\s*"[^"]*"/,
-    `appName: "${appName}"`,
-    "electron capacitor appName",
-  );
-
-  await writeFile(mobileCapConfigPath, nextMobileCapConfig, "utf8");
-  await writeFile(electronCapConfigPath, nextElectronCapConfig, "utf8");
+  for (const target of targets) {
+    const filePath = resolve(rootDir, target.relativePath);
+    const content = await readFile(filePath, "utf8");
+    const next = replaceOrThrow(
+      content,
+      /appName:\s*"[^"]*"/,
+      `appName: "${appName}"`,
+      target.label,
+    );
+    await writeFile(filePath, next, "utf8");
+  }
 }
 
 async function updateAndroidAppNames(appName: string): Promise<void> {
   const filePath = resolve(rootDir, "apps/mobile/android/app/src/main/res/values/strings.xml");
   const content = await readFile(filePath, "utf8");
-  let next = replaceOrThrow(
-    content,
-    /<string name="app_name">[\s\S]*?<\/string>/,
-    `<string name="app_name">${appName}</string>`,
-    "android app_name",
-  );
-  next = replaceOrThrow(
-    next,
-    /<string name="title_activity_main">[\s\S]*?<\/string>/,
-    `<string name="title_activity_main">${appName}</string>`,
-    "android title_activity_main",
-  );
+  const next = applyReplacementRules(content, [
+    {
+      pattern: /<string name="app_name">[\s\S]*?<\/string>/,
+      replacement: `<string name="app_name">${appName}</string>`,
+      label: "android app_name",
+    },
+    {
+      pattern: /<string name="title_activity_main">[\s\S]*?<\/string>/,
+      replacement: `<string name="title_activity_main">${appName}</string>`,
+      label: "android title_activity_main",
+    },
+  ]);
   await writeFile(filePath, next, "utf8");
 }
 
@@ -125,36 +119,36 @@ async function updateIosDisplayName(appName: string): Promise<void> {
 async function updateAndroidVersionInfo(appVersion: string, appBuildNumber: number): Promise<void> {
   const filePath = resolve(rootDir, "apps/mobile/android/app/build.gradle");
   const content = await readFile(filePath, "utf8");
-  let next = replaceOrThrow(
-    content,
-    /versionCode\s+\d+/,
-    `versionCode ${String(appBuildNumber)}`,
-    "android versionCode",
-  );
-  next = replaceOrThrow(
-    next,
-    /versionName\s+"[^"]*"/,
-    `versionName "${appVersion}"`,
-    "android versionName",
-  );
+  const next = applyReplacementRules(content, [
+    {
+      pattern: /versionCode\s+\d+/,
+      replacement: `versionCode ${String(appBuildNumber)}`,
+      label: "android versionCode",
+    },
+    {
+      pattern: /versionName\s+"[^"]*"/,
+      replacement: `versionName "${appVersion}"`,
+      label: "android versionName",
+    },
+  ]);
   await writeFile(filePath, next, "utf8");
 }
 
 async function updateIosVersionInfo(appVersion: string, appBuildNumber: number): Promise<void> {
   const filePath = resolve(rootDir, "apps/mobile/ios/App/App.xcodeproj/project.pbxproj");
   const content = await readFile(filePath, "utf8");
-  let next = replaceOrThrow(
-    content,
-    /MARKETING_VERSION = [^;]+;/g,
-    `MARKETING_VERSION = ${appVersion};`,
-    "iOS MARKETING_VERSION",
-  );
-  next = replaceOrThrow(
-    next,
-    /CURRENT_PROJECT_VERSION = [^;]+;/g,
-    `CURRENT_PROJECT_VERSION = ${String(appBuildNumber)};`,
-    "iOS CURRENT_PROJECT_VERSION",
-  );
+  const next = applyReplacementRules(content, [
+    {
+      pattern: /MARKETING_VERSION = [^;]+;/g,
+      replacement: `MARKETING_VERSION = ${appVersion};`,
+      label: "iOS MARKETING_VERSION",
+    },
+    {
+      pattern: /CURRENT_PROJECT_VERSION = [^;]+;/g,
+      replacement: `CURRENT_PROJECT_VERSION = ${String(appBuildNumber)};`,
+      label: "iOS CURRENT_PROJECT_VERSION",
+    },
+  ]);
   await writeFile(filePath, next, "utf8");
 }
 
@@ -167,18 +161,18 @@ async function updateBridgeApiVersion(apiVersion: string): Promise<void> {
   const readmePath = resolve(rootDir, "packages/capacitor-electron/README.md");
 
   const constants = await readFile(constantsPath, "utf8");
-  let nextConstants = replaceOrThrow(
-    constants,
-    /BRIDGE_PROTOCOL_VERSION = "[^"]+"/,
-    `BRIDGE_PROTOCOL_VERSION = "${apiVersion}"`,
-    "bridge protocol version",
-  );
-  nextConstants = replaceOrThrow(
-    nextConstants,
-    /BRIDGE_INVOKE_CHANNEL = "[^"]+"/,
-    `BRIDGE_INVOKE_CHANNEL = "crosscraft:cap-electron:v${major}:invoke"`,
-    "bridge invoke channel version",
-  );
+  const nextConstants = applyReplacementRules(constants, [
+    {
+      pattern: /BRIDGE_PROTOCOL_VERSION = "[^"]+"/,
+      replacement: `BRIDGE_PROTOCOL_VERSION = "${apiVersion}"`,
+      label: "bridge protocol version",
+    },
+    {
+      pattern: /BRIDGE_INVOKE_CHANNEL = "[^"]+"/,
+      replacement: `BRIDGE_INVOKE_CHANNEL = "crosscraft:cap-electron:v${major}:invoke"`,
+      label: "bridge invoke channel version",
+    },
+  ]);
   await writeFile(constantsPath, nextConstants, "utf8");
 
   const readme = await readFile(readmePath, "utf8");
@@ -191,19 +185,65 @@ async function updateBridgeApiVersion(apiVersion: string): Promise<void> {
   await writeFile(readmePath, nextReadme, "utf8");
 }
 
+type SyncUpdater = {
+  label: string;
+  execute(config: {
+    appName: string;
+    appVersion: string;
+    appBuildNumber: number;
+    apiVersion: string;
+  }): Promise<void>;
+};
+
+const syncUpdaters: readonly SyncUpdater[] = [
+  {
+    label: "workspace package versions",
+    execute: async ({ appVersion }) => updateWorkspaceVersions(appVersion),
+  },
+  {
+    label: "frontend title",
+    execute: async ({ appName }) => updateFrontendTitle(appName),
+  },
+  {
+    label: "electron package product info",
+    execute: async ({ appName, appVersion }) =>
+      updateElectronPackageProductName(appName, appVersion),
+  },
+  {
+    label: "capacitor app names",
+    execute: async ({ appName }) => updateCapacitorAppNames(appName),
+  },
+  {
+    label: "android app names",
+    execute: async ({ appName }) => updateAndroidAppNames(appName),
+  },
+  {
+    label: "iOS display name",
+    execute: async ({ appName }) => updateIosDisplayName(appName),
+  },
+  {
+    label: "android version info",
+    execute: async ({ appVersion, appBuildNumber }) =>
+      updateAndroidVersionInfo(appVersion, appBuildNumber),
+  },
+  {
+    label: "iOS version info",
+    execute: async ({ appVersion, appBuildNumber }) =>
+      updateIosVersionInfo(appVersion, appBuildNumber),
+  },
+  {
+    label: "bridge api version",
+    execute: async ({ apiVersion }) => updateBridgeApiVersion(apiVersion),
+  },
+];
+
 async function main(): Promise<void> {
-  const { appName, appVersion, appBuildNumber, apiVersion } = loadAppConfig(import.meta.url);
-  await updateWorkspaceVersions(appVersion);
-  await updateFrontendTitle(appName);
-  await updateElectronPackageProductName(appName, appVersion);
-  await updateCapacitorAppNames(appName);
-  await updateAndroidAppNames(appName);
-  await updateIosDisplayName(appName);
-  await updateAndroidVersionInfo(appVersion, appBuildNumber);
-  await updateIosVersionInfo(appVersion, appBuildNumber);
-  await updateBridgeApiVersion(apiVersion);
+  const config = loadAppConfig(import.meta.url);
+  for (const updater of syncUpdaters) {
+    await updater.execute(config);
+  }
   console.log(
-    `[sync-app-config] synced appName="${appName}" appVersion="${appVersion}" build=${String(appBuildNumber)} apiVersion="${apiVersion}"`,
+    `[sync-app-config] synced appName="${config.appName}" appVersion="${config.appVersion}" build=${String(config.appBuildNumber)} apiVersion="${config.apiVersion}"`,
   );
 }
 

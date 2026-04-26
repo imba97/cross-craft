@@ -5,6 +5,7 @@ import { dirname, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { select } from "@inquirer/prompts";
+import { readOptionalPort, readOptionalString, readOptionalUrl } from "../config/env.ts";
 
 let isShuttingDown = false;
 let activeChild: ChildProcess | null = null;
@@ -200,8 +201,9 @@ function listIosTargetChoices(): IosTargetChoice[] {
 }
 
 async function resolveIosTargetId(): Promise<string | null> {
-  if (process.env.IOS_TARGET_ID) {
-    return process.env.IOS_TARGET_ID;
+  const fromEnv = readOptionalString("IOS_TARGET_ID", { namespace: "dev-ios" });
+  if (fromEnv) {
+    return fromEnv;
   }
 
   const choices = listIosTargetChoices();
@@ -249,9 +251,10 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const iosProjectDir = resolve(scriptDir, "../../apps/mobile/ios");
 const mobileDir = resolve(scriptDir, "../../apps/mobile");
 const iosCapConfigPath = resolve(scriptDir, "../../apps/mobile/ios/App/App/capacitor.config.json");
-const devServerUrl = "http://127.0.0.1:5173";
+const devServerUrl =
+  readOptionalUrl("DEV_SERVER_URL", { namespace: "dev-ios" }) ?? "http://127.0.0.1:5173";
 const liveReloadHost = resolveLiveReloadHost();
-const liveReloadPort = "5173";
+const liveReloadPort = readOptionalPort("LIVE_RELOAD_PORT", { namespace: "dev-ios" }) ?? "5173";
 const liveReloadUrl = `http://${liveReloadHost}:${liveReloadPort}`;
 
 try {
